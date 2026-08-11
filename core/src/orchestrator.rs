@@ -1,4 +1,7 @@
 use crate::config::ConfigError;
+use crate::gen::{
+    BinomialGen, CauchyGen, GeometricGen, Generator, LogNormalGen,
+};
 use crate::types::*;
 use rand::rngs::StdRng;
 use rand::{RngExt, SeedableRng};
@@ -88,6 +91,14 @@ fn gen_field(field: &FieldDef, pv: &mut HashMap<String, i64>, rng: &mut impl Rng
             pv.insert(field.name.clone(), v);
             vec![v.to_string()]
         }
+        RangeValue::RangeFrom { from_field, min_mult, max_mult } => {
+            let p = pv.get(from_field).copied().unwrap_or(1) as f64;
+            let min = (p * min_mult).max(1.0) as i64;
+            let max = (p * max_mult).max(min as f64) as i64;
+            let v = rng.random_range(min..=max);
+            pv.insert(field.name.clone(), v);
+            vec![v.to_string()]
+        }
         _ => {
             let (num, s) = gen_scalar(field, rng);
             pv.insert(field.name.clone(), num);
@@ -96,7 +107,51 @@ fn gen_field(field: &FieldDef, pv: &mut HashMap<String, i64>, rng: &mut impl Rng
     }
 }
 
+/// Extract (min, max) as f64 from a RangeValue, falling back to defaults.
+fn extract_float_range(range: &RangeValue, default_min: f64, default_max: f64) -> (f64, f64) {
+    match range {
+        RangeValue::Float32(r) => (r.min as f64, r.max as f64),
+        RangeValue::Float64(r) => (r.min, r.max),
+        RangeValue::Int32(r) => (r.min as f64, r.max as f64),
+        RangeValue::Int64(r) => (r.min as f64, r.max as f64),
+        _ => (default_min, default_max),
+    }
+}
+
 fn gen_scalar(field: &FieldDef, rng: &mut impl RngExt) -> (i64, String) {
+    // Distribution-aware generation for non-uniform distributions
+    match field.distribution {
+        Distribution::Binomial => {
+            let n = match &field.range {
+                RangeValue::Int32(r) => r.min.max(1) as u64,
+                RangeValue::Int64(r) => r.min.max(1) as u64,
+                _ => 1,
+            };
+            let mut gen = BinomialGen::new(n, 0.5);
+            let v = gen.generate(rng);
+            return (v as i64, v.to_string());
+        }
+        Distribution::Geometric => {
+            let mut gen = GeometricGen::new(0.5);
+            let v = gen.generate(rng);
+            return (v as i64, v.to_string());
+        }
+        Distribution::LogNormal => {
+            let (mu, sigma) = extract_float_range(&field.range, 0.0, 1.0);
+            let mut gen = LogNormalGen::new(mu, sigma.max(0.1));
+            let v = gen.generate(rng);
+            return (v as i64, format!("{:.6}", v));
+        }
+        Distribution::Cauchy => {
+            let (median, scale) = extract_float_range(&field.range, 0.0, 1.0);
+            let mut gen = CauchyGen::new(median, scale.max(0.1));
+            let v = gen.generate(rng);
+            return (v as i64, format!("{:.6}", v));
+        }
+        _ => {} // Uniform, Normal, Exponential, Poisson fall through to default
+    }
+
+    // Default: uniform random_range (existing behavior)
     match (&field.data_type, &field.range) {
         (DataType::Int32, RangeValue::Int32(r)) => { let v = rng.random_range(r.min..=r.max); (v as i64, v.to_string()) }
         (DataType::Int64, RangeValue::Int64(r)) => { let v = rng.random_range(r.min..=r.max); (v, v.to_string()) }
@@ -127,13 +182,13 @@ mod tests {
     }
 
     #[test] fn single_file_int() {
-        let c = TestConfig { files_count: 1, prefix: "t".into(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![int_field("n",1,100)], seed: Some(42) };
+        let c = TestConfig { files_count: 1, prefix: "t".into(), suffix: String::new(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![int_field("n",1,100)], seed: Some(42) };
         let r = generate(&c).unwrap();
         assert_eq!(r.files.len(), 1);
     }
 
     #[test] fn count_from_parent() {
-        let c = TestConfig { files_count: 1, prefix: "t".into(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![
+        let c = TestConfig { files_count: 1, prefix: "t".into(), suffix: String::new(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![
             int_field("n", 3, 3),
             FieldDef { name: "arr".into(), data_type: DataType::Int32, distribution: Distribution::Uniform, range: RangeValue::CountFrom { from_field: "n".into(), elem_min: 1, elem_max: 100 }, depends_on: Some("n".into()) , separator: FieldSeparator::default()},
         ], seed: Some(42) };
@@ -144,7 +199,7 @@ mod tests {
     }
 
     #[test] fn value_from_parent() {
-        let c = TestConfig { files_count: 1, prefix: "t".into(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![
+        let c = TestConfig { files_count: 1, prefix: "t".into(), suffix: String::new(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![
             int_field("n", 10, 10),
             FieldDef { name: "m".into(), data_type: DataType::Int32, distribution: Distribution::Uniform, range: RangeValue::ValueFrom { from_field: "n".into(), multiplier: 1.0 }, depends_on: Some("n".into()) , separator: FieldSeparator::default()},
         ], seed: Some(42) };
@@ -156,15 +211,28 @@ mod tests {
         assert!(m >= 1 && m <= 10);
     }
 
+    #[test] fn range_from_parent() {
+        let c = TestConfig { files_count: 1, prefix: "t".into(), suffix: String::new(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![
+            int_field("n", 10, 10),
+            FieldDef { name: "m".into(), data_type: DataType::Int32, distribution: Distribution::Uniform, range: RangeValue::RangeFrom { from_field: "n".into(), min_mult: 0.5, max_mult: 2.0 }, depends_on: Some("n".into()) , separator: FieldSeparator::default()},
+        ], seed: Some(42) };
+        let r = generate(&c).unwrap();
+        let parts: Vec<_> = r.files[0].content.trim().split(' ').collect();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], "10");
+        let m: i64 = parts[1].parse().unwrap();
+        assert!(m >= 5 && m <= 20, "m={} should be in [5,20]", m);
+    }
+
     #[test] fn same_seed_identical() {
-        let c = TestConfig { files_count: 2, prefix: "t".into(), testcase_mode: TestCaseMode::Fixed(3), fields: vec![int_field("n",1,1000)], seed: Some(12345) };
+        let c = TestConfig { files_count: 2, prefix: "t".into(), suffix: String::new(), testcase_mode: TestCaseMode::Fixed(3), fields: vec![int_field("n",1,1000)], seed: Some(12345) };
         assert_eq!(generate(&c).unwrap().files, generate(&c).unwrap().files);
     }
 
-    #[test] fn files_count_err() { assert!(generate(&TestConfig { files_count: 1001, prefix: "t".into(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![int_field("n",1,100)], seed: Some(42) }).is_err()); }
-    #[test] fn empty_fields_err() { assert!(generate(&TestConfig { files_count: 1, prefix: "t".into(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![], seed: Some(42) }).is_err()); }
+    #[test] fn files_count_err() { assert!(generate(&TestConfig { files_count: 1001, prefix: "t".into(), suffix: String::new(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![int_field("n",1,100)], seed: Some(42) }).is_err()); }
+    #[test] fn empty_fields_err() { assert!(generate(&TestConfig { files_count: 1, prefix: "t".into(), suffix: String::new(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![], seed: Some(42) }).is_err()); }
     #[test] fn circular_err() {
-        let c = TestConfig { files_count: 1, prefix: "t".into(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![
+        let c = TestConfig { files_count: 1, prefix: "t".into(), suffix: String::new(), testcase_mode: TestCaseMode::Fixed(1), fields: vec![
             FieldDef { name: "a".into(), data_type: DataType::Int32, distribution: Distribution::Uniform, range: RangeValue::Int32(Range::new(1,10)), depends_on: Some("b".into()) , separator: FieldSeparator::default()},
             FieldDef { name: "b".into(), data_type: DataType::Int32, distribution: Distribution::Uniform, range: RangeValue::Int32(Range::new(1,10)), depends_on: Some("a".into()) , separator: FieldSeparator::default()},
         ], seed: Some(42) };

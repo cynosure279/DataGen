@@ -58,6 +58,7 @@ mod tests {
         let config = TestConfig {
             files_count: 10,
             prefix: "test".into(),
+            suffix: String::new(),
             testcase_mode: TestCaseMode::Fixed(3),
             fields: vec![FieldDef {
                 name: "n".into(),
@@ -78,6 +79,7 @@ mod tests {
         let config = TestConfig {
             files_count: 1001,
             prefix: "test".into(),
+            suffix: String::new(),
             testcase_mode: TestCaseMode::Disabled,
             fields: vec![FieldDef {
                 name: "n".into(),
@@ -96,6 +98,7 @@ mod tests {
         let config = TestConfig {
             files_count: 10,
             prefix: "test".into(),
+            suffix: String::new(),
             testcase_mode: TestCaseMode::Disabled,
             fields: vec![],
             seed: None,
@@ -108,6 +111,7 @@ mod tests {
         let config = TestConfig {
             files_count: 10,
             prefix: "test".into(),
+            suffix: String::new(),
             testcase_mode: TestCaseMode::Fixed(5),
             fields: vec![FieldDef {
                 name: "n".into(),

@@ -64,8 +64,3 @@ datagen/
 └── README.md
 ```
 
----
-
-## 许可 / License
-
-MIT © 2026 DataGen

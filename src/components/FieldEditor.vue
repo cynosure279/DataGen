@@ -22,6 +22,12 @@
       <template v-else-if="depMode === 'ValueFrom'">
         <n-input-number v-model:value="depMultiplier" :min="0.1" :step="0.1" placeholder="倍数 (1.0 = 不超过父字段)"/>
       </template>
+      <template v-else-if="depMode === 'RangeFrom'">
+        <n-space>
+          <n-input-number v-model:value="depMinMult" :min="0.1" :step="0.1" placeholder="最小倍数"/>
+          <n-input-number v-model:value="depMaxMult" :min="0.1" :step="0.1" placeholder="最大倍数"/>
+        </n-space>
+      </template>
       <template v-else>
         <n-space><n-input-number v-model:value="flatRange.min" placeholder="Min"/><n-input-number v-model:value="flatRange.max" placeholder="Max"/></n-space>
       </template>
@@ -38,10 +44,11 @@ const props = defineProps<{ modelValue: FieldDef; selfIndex?: number; allFields?
 const emit = defineEmits<{ (e:'update:modelValue',v:FieldDef): void; (e:'remove'): void }>()
 
 const typeOpts = ['Int32','Int64','Float32','Float64','Char','String'].map(v=>({label:v,value:v}))
-const distOpts = ['Uniform','Normal','Exponential','Poisson'].map(v=>({label:v,value:v}))
+const distOpts = ['Uniform','Normal','Exponential','Poisson','Binomial','Geometric','LogNormal','Cauchy'].map(v=>({label:v,value:v}))
 
-const depMode = ref<'none'|'CountFrom'|'ValueFrom'>('none')
+const depMode = ref<'none'|'CountFrom'|'ValueFrom'|'RangeFrom'>('none')
 const depElemMin = ref(1); const depElemMax = ref(1000); const depMultiplier = ref(1.0)
+const depMinMult = ref(0.5); const depMaxMult = ref(2.0)
 
 function extractRange(rv: RangeValue): { min: number; max: number } {
   if ('Int32' in rv) return rv.Int32
@@ -78,6 +85,7 @@ function refreshDepOpts() {
       { label: '无依赖', value: 'none' },
       ...parentNames.map(n => ({ label: `CountFrom: 个数 = ${n}`, value: `cf:${n}` })),
       ...parentNames.map(n => ({ label: `ValueFrom: max = ${n} × 倍数`, value: `vf:${n}` })),
+      ...parentNames.map(n => ({ label: `RangeFrom: 范围 = ${n} × [最小倍数, 最大倍数]`, value: `rf:${n}` })),
     ]
   }
 }
@@ -98,6 +106,11 @@ function onDepChange(val: string) {
     localField.depends_on = parent
     depMode.value = 'ValueFrom'
     localField.range = { ValueFrom: { from_field: parent, multiplier: depMultiplier.value } }
+  } else if (val.startsWith('rf:')) {
+    const parent = val.slice(3)
+    localField.depends_on = parent
+    depMode.value = 'RangeFrom'
+    localField.range = { RangeFrom: { from_field: parent, min_mult: depMinMult.value, max_mult: depMaxMult.value } }
   }
   emitUpdate()
 }
@@ -124,6 +137,13 @@ watch([depElemMin, depElemMax], () => {
 watch(depMultiplier, () => {
   if (depMode.value === 'ValueFrom' && localField.depends_on) {
     localField.range = { ValueFrom: { from_field: localField.depends_on, multiplier: depMultiplier.value } }
+    emitUpdate()
+  }
+})
+
+watch([depMinMult, depMaxMult], () => {
+  if (depMode.value === 'RangeFrom' && localField.depends_on) {
+    localField.range = { RangeFrom: { from_field: localField.depends_on, min_mult: depMinMult.value, max_mult: depMaxMult.value } }
     emitUpdate()
   }
 })

@@ -192,6 +192,135 @@ impl Generator for PoissonGen {
 }
 
 // ---------------------------------------------------------------------------
+// BinomialGen
+// ---------------------------------------------------------------------------
+
+/// Generates binomially distributed `u64` values.
+///
+/// The distribution has `n` trials and success probability `p`.
+pub struct BinomialGen {
+    dist: rand_distr::Binomial,
+}
+
+impl BinomialGen {
+    /// Create a new binomial generator.
+    ///
+    /// # Panics
+    /// Panics if `p` is not in `[0, 1]` or if `n == 0`.
+    pub fn new(n: u64, p: f64) -> Self {
+        Self {
+            dist: rand_distr::Binomial::new(n, p)
+                .expect("Binomial::new should succeed for valid parameters"),
+        }
+    }
+}
+
+impl Generator for BinomialGen {
+    type Output = u64;
+
+    fn generate(&mut self, rng: &mut impl rand::Rng) -> u64 {
+        self.dist.sample(rng)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GeometricGen
+// ---------------------------------------------------------------------------
+
+/// Generates geometrically distributed `u64` values.
+///
+/// The distribution has success probability `p` per trial.
+/// Values represent the number of failures before the first success.
+pub struct GeometricGen {
+    dist: rand_distr::Geometric,
+}
+
+impl GeometricGen {
+    /// Create a new geometric generator.
+    ///
+    /// # Panics
+    /// Panics if `p` is not in `[0, 1]`.
+    pub fn new(p: f64) -> Self {
+        Self {
+            dist: rand_distr::Geometric::new(p)
+                .expect("Geometric::new should succeed for valid p"),
+        }
+    }
+}
+
+impl Generator for GeometricGen {
+    type Output = u64;
+
+    fn generate(&mut self, rng: &mut impl rand::Rng) -> u64 {
+        self.dist.sample(rng)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LogNormalGen
+// ---------------------------------------------------------------------------
+
+/// Generates log-normally distributed `f64` values.
+///
+/// The distribution has log-space mean `mu` and log-space standard deviation `sigma`.
+pub struct LogNormalGen {
+    dist: rand_distr::LogNormal<f64>,
+}
+
+impl LogNormalGen {
+    /// Create a new log-normal generator.
+    ///
+    /// # Panics
+    /// Panics if `sigma <= 0` or non-finite.
+    pub fn new(mu: f64, sigma: f64) -> Self {
+        Self {
+            dist: rand_distr::LogNormal::new(mu, sigma)
+                .expect("LogNormal::new should succeed for valid parameters"),
+        }
+    }
+}
+
+impl Generator for LogNormalGen {
+    type Output = f64;
+
+    fn generate(&mut self, rng: &mut impl rand::Rng) -> f64 {
+        self.dist.sample(rng)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CauchyGen
+// ---------------------------------------------------------------------------
+
+/// Generates Cauchy-distributed `f64` values.
+///
+/// The distribution has median `median` and scale `scale`.
+pub struct CauchyGen {
+    dist: rand_distr::Cauchy<f64>,
+}
+
+impl CauchyGen {
+    /// Create a new Cauchy generator.
+    ///
+    /// # Panics
+    /// Panics if `scale <= 0` or non-finite.
+    pub fn new(median: f64, scale: f64) -> Self {
+        Self {
+            dist: rand_distr::Cauchy::new(median, scale)
+                .expect("Cauchy::new should succeed for valid parameters"),
+        }
+    }
+}
+
+impl Generator for CauchyGen {
+    type Output = f64;
+
+    fn generate(&mut self, rng: &mut impl rand::Rng) -> f64 {
+        self.dist.sample(rng)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -430,5 +559,117 @@ mod tests {
         let val = gen.generate(&mut rng);
         // Verify it's a sensible u64 value
         assert!(val < 100, "Poisson(10) sample {val} seems too large");
+    }
+
+    // -----------------------------------------------------------------------
+    // BinomialGen
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn binomial_deterministic() {
+        let mut gen = BinomialGen::new(10, 0.5);
+        let mut rng1 = rng_fixed();
+        let mut rng2 = rng_fixed();
+        let seq1: Vec<u64> = (0..20).map(|_| gen.generate(&mut rng1)).collect();
+        let seq2: Vec<u64> = (0..20).map(|_| gen.generate(&mut rng2)).collect();
+        assert_eq!(seq1, seq2);
+    }
+
+    #[test]
+    fn binomial_in_range() {
+        let mut gen = BinomialGen::new(100, 0.3);
+        let mut rng = rng_fixed();
+        for _ in 0..1000 {
+            let val = gen.generate(&mut rng);
+            assert!(val <= 100, "Binomial(100, 0.3) sample {val} > 100");
+        }
+    }
+
+    #[test]
+    fn binomial_mean_approx() {
+        let mut gen = BinomialGen::new(100, 0.5);
+        let mut rng = rng_fixed();
+        let n = 10_000;
+        let sum: u64 = (0..n).map(|_| gen.generate(&mut rng)).sum();
+        let mean = sum as f64 / n as f64;
+        // Mean of Binomial(100, 0.5) is 50; allow 10% tolerance
+        assert!(
+            (mean - 50.0).abs() < 5.0,
+            "mean {mean} too far from 50.0"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // GeometricGen
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn geometric_deterministic() {
+        let mut gen = GeometricGen::new(0.5);
+        let mut rng1 = rng_fixed();
+        let mut rng2 = rng_fixed();
+        let seq1: Vec<u64> = (0..20).map(|_| gen.generate(&mut rng1)).collect();
+        let seq2: Vec<u64> = (0..20).map(|_| gen.generate(&mut rng2)).collect();
+        assert_eq!(seq1, seq2);
+    }
+
+    #[test]
+    fn geometric_nonzero() {
+        let mut gen = GeometricGen::new(0.8);
+        let mut rng = rng_fixed();
+        for _ in 0..1000 {
+            let val = gen.generate(&mut rng);
+            // Geometric samples are failures before first success, so >= 0
+            assert!(val < 100, "Geometric(0.8) sample {val} seems too large");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // LogNormalGen
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn lognormal_deterministic() {
+        let mut gen = LogNormalGen::new(0.0, 1.0);
+        let mut rng1 = rng_fixed();
+        let mut rng2 = rng_fixed();
+        let seq1: Vec<f64> = (0..20).map(|_| gen.generate(&mut rng1)).collect();
+        let seq2: Vec<f64> = (0..20).map(|_| gen.generate(&mut rng2)).collect();
+        assert_eq!(seq1, seq2);
+    }
+
+    #[test]
+    fn lognormal_positive() {
+        let mut gen = LogNormalGen::new(0.0, 1.0);
+        let mut rng = rng_fixed();
+        for _ in 0..1000 {
+            let val = gen.generate(&mut rng);
+            assert!(val > 0.0, "LogNormal sample {val} must be positive");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // CauchyGen
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn cauchy_deterministic() {
+        let mut gen = CauchyGen::new(0.0, 1.0);
+        let mut rng1 = rng_fixed();
+        let mut rng2 = rng_fixed();
+        let seq1: Vec<f64> = (0..20).map(|_| gen.generate(&mut rng1)).collect();
+        let seq2: Vec<f64> = (0..20).map(|_| gen.generate(&mut rng2)).collect();
+        assert_eq!(seq1, seq2);
+    }
+
+    #[test]
+    fn cauchy_finite_samples() {
+        let mut gen = CauchyGen::new(0.0, 1.0);
+        let mut rng = rng_fixed();
+        for _ in 0..1000 {
+            let val = gen.generate(&mut rng);
+            // Cauchy can produce extreme values, but should be finite
+            assert!(val.is_finite(), "Cauchy sample {val} should be finite");
+        }
     }
 }

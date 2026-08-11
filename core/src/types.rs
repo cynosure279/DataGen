@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub enum DataType { Int32, Int64, BigInt, Float32, Float64, Char, String }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum Distribution { Uniform, Normal, Exponential, Poisson }
+pub enum Distribution { Uniform, Normal, Exponential, Poisson, Binomial, Geometric, LogNormal, Cauchy }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Range<T: PartialOrd> { pub min: T, pub max: T }
@@ -32,6 +32,8 @@ pub enum RangeValue {
     /// Single value: max = parent_value * multiplier (as i64), min = 1.
     /// E.g. "M where M ≤ 2*N": ValueFrom { from_field: "n", multiplier: 2.0 }
     ValueFrom { from_field: String, multiplier: f64 },
+    /// Both min and max derived from parent: min = parent * min_mult, max = parent * max_mult.
+    RangeFrom { from_field: String, min_mult: f64, max_mult: f64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

@@ -5,6 +5,11 @@ pub mod distribution;
 pub mod graph;
 pub mod numtheory;
 
+pub use distribution::{
+    BinomialGen, CauchyGen, ExponentialGen, GeometricGen, LogNormalGen, NormalGen, PoissonGen,
+    UniformFloatGen, UniformIntGen,
+};
+
 /// Trait for all data generators.
 ///
 /// Implementors produce values of `Output` using a random number source.

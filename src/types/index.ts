@@ -1,5 +1,5 @@
 export type DataType = 'Int32' | 'Int64' | 'BigInt' | 'Float32' | 'Float64' | 'Char' | 'String'
-export type Distribution = 'Uniform' | 'Normal' | 'Exponential' | 'Poisson'
+export type Distribution = 'Uniform' | 'Normal' | 'Exponential' | 'Poisson' | 'Binomial' | 'Geometric' | 'LogNormal' | 'Cauchy'
 
 export interface Range { min: number; max: number }
 
@@ -8,6 +8,7 @@ export type RangeValue =
   | { Char: Range } | { StringLen: Range }
   | { CountFrom: { from_field: string; elem_min: number; elem_max: number } }
   | { ValueFrom: { from_field: string; multiplier: number } }
+  | { RangeFrom: { from_field: string; min_mult: number; max_mult: number } }
 
 export type FieldSeparator = 'Space' | 'Newline'
 
