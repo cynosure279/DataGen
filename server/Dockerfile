@@ -20,12 +20,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY Cargo.toml Cargo.lock ./
 COPY core/Cargo.toml ./core/
 COPY native/Cargo.toml ./native/
+COPY wasm/Cargo.toml ./wasm/
 COPY server/Cargo.toml ./server/
 
 # Create dummy src files to build dependencies (cached layer)
-RUN mkdir -p core/src native/src server/src && \
+RUN mkdir -p core/src native/src wasm/src server/src && \
     echo "fn main() {}" > server/src/main.rs && \
-    for d in core native; do \
+    for d in core native wasm; do \
         echo "// dummy" > $d/src/lib.rs; \
     done
 
@@ -33,9 +34,10 @@ RUN mkdir -p core/src native/src server/src && \
 RUN cargo build --release -p datagen-server 2>/dev/null || true
 
 # Remove dummy files and copy real source
-RUN rm -rf core/src native/src server/src
+RUN rm -rf core/src native/src wasm/src server/src
 COPY core/src ./core/src
 COPY native/src ./native/src
+COPY wasm/src ./wasm/src
 COPY server/src ./server/src
 
 # Touch main.rs to force rebuild of the actual binary
