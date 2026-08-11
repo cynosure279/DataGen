@@ -1,0 +1,37 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-execute",
+    "shell:allow-spawn",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        { "name": "gcc", "cmd": "gcc" },
+        { "name": "g++", "cmd": "g++" },
+        { "name": "clang", "cmd": "clang" },
+        { "name": "clang++", "cmd": "clang++" },
+        { "name": "python3", "cmd": "python3" },
+        { "name": "sh", "cmd": "sh" }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        { "name": "gcc", "cmd": "gcc" },
+        { "name": "g++", "cmd": "g++" },
+        { "name": "clang", "cmd": "clang" },
+        { "name": "clang++", "cmd": "clang++" },
+        { "name": "python3", "cmd": "python3" },
+        { "name": "sh", "cmd": "sh" }
+      ]
+    },
+    "fs:default",
+    "fs:allow-applocaldata-read-recursive",
+    "fs:allow-applocaldata-write-recursive",
+    "dialog:default",
+    "dialog:allow-open"
+  ]
+}

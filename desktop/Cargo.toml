@@ -1,0 +1,17 @@
+[package]
+name = "datagen-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+datagen-core = { path = "../core", package = "datagen-core" }
+native = { path = "../native", package = "datagen-native" }
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
