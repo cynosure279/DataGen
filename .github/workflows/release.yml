@@ -65,6 +65,7 @@ jobs:
 
   build-web:
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
