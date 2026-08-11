@@ -1,6 +1,6 @@
 <template>
   <n-modal :show="show" @update:show="(v: boolean) => emit('update:show', v)" preset="card" title="欢迎使用 DataGen" style="width:640px;">
-    <n-steps :current="step" style="margin-bottom:24px;">
+    <n-steps :current="step + 1" style="margin-bottom:24px;">
       <n-step title="编译器" description="检测系统编译器" />
       <n-step title="配置" description="设置生成参数" />
       <n-step title="评测" description="粘贴代码 & 运行" />

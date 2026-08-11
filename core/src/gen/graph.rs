@@ -9,8 +9,7 @@ use crate::types::WeightConfig;
 use petgraph::graph::{DiGraph, UnGraph};
 #[cfg(test)]
 use petgraph::algo;
-use rand::Rng;
-use rand::RngExt;
+use rand::{Rng, RngExt};
 use rand::seq::SliceRandom;
 use std::fmt::Write;
 
@@ -91,12 +90,14 @@ fn format_output(header: &str, edges: &[(u32, u32)], weights: Option<&[f64]>) ->
 
 /// Generate random weights using the given config.
 fn generate_weights(rng: &mut impl Rng, count: usize, config: &WeightConfig) -> Vec<f64> {
+    let empty_pv = std::collections::HashMap::new();
     (0..count)
-        .map(|_| match config.range {
-            crate::types::RangeValue::Int32(ref r) => rng.random_range(r.min..=r.max) as f64,
-            crate::types::RangeValue::Int64(ref r) => rng.random_range(r.min..=r.max) as f64,
-            crate::types::RangeValue::Float32(ref r) => rng.random_range(r.min..=r.max) as f64,
-            crate::types::RangeValue::Float64(ref r) => rng.random_range(r.min..=r.max),
+        .map(|_| match &config.range {
+            crate::types::RangeValue::Static { min, max } => {
+                let lo = min.eval(&empty_pv, rng);
+                let hi = max.eval(&empty_pv, rng);
+                rng.random_range(lo as f64..=hi as f64)
+            }
             _ => 1.0,
         })
         .collect()
@@ -118,12 +119,12 @@ impl TreeGen {
     /// u2 v2
     /// ...
     /// ```
-    pub fn random_tree<R: Rng + RngExt>(n: u32, rng: &mut R) -> String {
+    pub fn random_tree<R: Rng>(n: u32, rng: &mut R) -> String {
         Self::random_tree_weighted(n, rng, None)
     }
 
     /// Generate a random tree with optional edge weights.
-    pub fn random_tree_weighted<R: Rng + RngExt>(n: u32, rng: &mut R, weight: Option<&WeightConfig>) -> String {
+    pub fn random_tree_weighted<R: Rng>(n: u32, rng: &mut R, weight: Option<&WeightConfig>) -> String {
         if n == 0 {
             return String::new();
         }
@@ -186,12 +187,12 @@ impl RandomGraphGen {
     /// Generate a random graph with `n` vertices and `m` edges (G(n,m) model).
     ///
     /// No self-loops, no duplicate edges.
-    pub fn random_graph<R: Rng + RngExt>(n: u32, m: u32, rng: &mut R) -> String {
+    pub fn random_graph<R: Rng>(n: u32, m: u32, rng: &mut R) -> String {
         Self::random_graph_weighted(n, m, rng, None)
     }
 
     /// Generate a random graph with optional edge weights.
-    pub fn random_graph_weighted<R: Rng + RngExt>(n: u32, m: u32, rng: &mut R, weight: Option<&WeightConfig>) -> String {
+    pub fn random_graph_weighted<R: Rng>(n: u32, m: u32, rng: &mut R, weight: Option<&WeightConfig>) -> String {
         if n == 0 {
             return format!("{} {}\n", n, 0);
         }
@@ -229,12 +230,12 @@ impl ConnectedGraphGen {
     ///
     /// Guarantees connectivity by first generating a random spanning tree,
     /// then adding `m - (n-1)` random extra edges.
-    pub fn connected_graph<R: Rng + RngExt>(n: u32, m: u32, rng: &mut R) -> String {
+    pub fn connected_graph<R: Rng>(n: u32, m: u32, rng: &mut R) -> String {
         Self::connected_graph_weighted(n, m, rng, None)
     }
 
     /// Generate a connected graph with optional edge weights.
-    pub fn connected_graph_weighted<R: Rng + RngExt>(n: u32, m: u32, rng: &mut R, weight: Option<&WeightConfig>) -> String {
+    pub fn connected_graph_weighted<R: Rng>(n: u32, m: u32, rng: &mut R, weight: Option<&WeightConfig>) -> String {
         assert!(n > 0, "ConnectedGraphGen: n must be > 0");
         assert!(m >= n - 1, "ConnectedGraphGen: m must be >= n-1 for connectivity");
         let max_edges = n * (n - 1) / 2;
@@ -290,12 +291,12 @@ impl DAGGen {
     ///
     /// Assigns a random topological order, then adds `m` forward edges
     /// (from lower order to higher order).
-    pub fn random_dag<R: Rng + RngExt>(n: u32, m: u32, rng: &mut R) -> String {
+    pub fn random_dag<R: Rng>(n: u32, m: u32, rng: &mut R) -> String {
         Self::random_dag_weighted(n, m, rng, None)
     }
 
     /// Generate a random DAG with optional edge weights.
-    pub fn random_dag_weighted<R: Rng + RngExt>(n: u32, m: u32, rng: &mut R, weight: Option<&WeightConfig>) -> String {
+    pub fn random_dag_weighted<R: Rng>(n: u32, m: u32, rng: &mut R, weight: Option<&WeightConfig>) -> String {
         assert!(n > 0, "DAGGen: n must be > 0");
         let max_edges = n * (n - 1) / 2;
         assert!(m <= max_edges, "DAGGen: m exceeds max possible edges");
@@ -338,12 +339,12 @@ impl BipartiteGraphGen {
     ///
     /// Left vertices: 1..=left
     /// Right vertices: left+1..=left+right
-    pub fn bipartite_graph<R: Rng + RngExt>(left: u32, right: u32, m: u32, rng: &mut R) -> String {
+    pub fn bipartite_graph<R: Rng>(left: u32, right: u32, m: u32, rng: &mut R) -> String {
         Self::bipartite_graph_weighted(left, right, m, rng, None)
     }
 
     /// Generate a bipartite graph with optional edge weights.
-    pub fn bipartite_graph_weighted<R: Rng + RngExt>(left: u32, right: u32, m: u32, rng: &mut R, weight: Option<&WeightConfig>) -> String {
+    pub fn bipartite_graph_weighted<R: Rng>(left: u32, right: u32, m: u32, rng: &mut R, weight: Option<&WeightConfig>) -> String {
         let max_edges = left * right;
         assert!(m <= max_edges, "BipartiteGraphGen: m exceeds max possible edges ({}*{}={})", left, right, max_edges);
 

@@ -84,7 +84,12 @@ jobs:
         run: pnpm lint
 
       - name: pnpm test
-        run: pnpm test
+        run: |
+          if find src -name "*.test.*" -o -name "*.spec.*" 2>/dev/null | grep -q .; then
+            pnpm test
+          else
+            echo "No test files found, skipping"
+          fi
 
   #############################################################################
   # TypeScript type-check (vue-tsc)

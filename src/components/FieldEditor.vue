@@ -7,38 +7,48 @@
         <n-select v-model:value="localField.data_type" :options="typeOpts" style="flex:1"/>
         <n-select v-model:value="localField.distribution" :options="distOpts" style="flex:1"/>
       </n-space>
-      <n-form-item label="依赖字段（可选）">
+
+      <!-- Dependency mode: only CountFrom (array dependency) -->
+      <div class="form-field">
+        <label class="form-label">数组依赖（可选）</label>
         <n-select v-model:value="depMode" :options="depOpts" @update:value="onDepChange"/>
-      </n-form-item>
-      <n-form-item label="分隔符">
-        <n-select v-model:value="localField.separator" :options="[{label:'空格 (同行)',value:'Space'},{label:'换行',value:'Newline'}]" @update:value="() => emitUpdate()"/>
-      </n-form-item>
+      </div>
       <template v-if="depMode === 'CountFrom'">
-        <n-space>
-          <n-input-number v-model:value="depElemMin" placeholder="元素最小值"/>
-          <n-input-number v-model:value="depElemMax" placeholder="元素最大值"/>
-        </n-space>
+        <div class="form-field">
+          <label class="form-label">个数来源字段</label>
+          <n-select v-model:value="countFromField" :options="fieldOpts" @update:value="onCountFromChange" />
+        </div>
+        <div class="form-field">
+          <label class="form-label">元素值表达式</label>
+          <ExpressionEditor v-model="localElemValue" :allFields="allFields" :selfIndex="selfIndex" />
+        </div>
       </template>
-      <template v-else-if="depMode === 'ValueFrom'">
-        <n-input-number v-model:value="depMultiplier" :min="0.1" :step="0.1" placeholder="倍数 (1.0 = 不超过父字段)"/>
+
+      <!-- Static bounds: min/max expression editors -->
+      <template v-if="depMode !== 'CountFrom'">
+        <div class="form-field">
+          <label class="form-label">最小值表达式</label>
+          <ExpressionEditor v-model="localMin" :allFields="allFields" :selfIndex="selfIndex" />
+        </div>
+        <div class="form-field">
+          <label class="form-label">最大值表达式</label>
+          <ExpressionEditor v-model="localMax" :allFields="allFields" :selfIndex="selfIndex" />
+        </div>
       </template>
-      <template v-else-if="depMode === 'RangeFrom'">
-        <n-space>
-          <n-input-number v-model:value="depMinMult" :min="0.1" :step="0.1" placeholder="最小倍数"/>
-          <n-input-number v-model:value="depMaxMult" :min="0.1" :step="0.1" placeholder="最大倍数"/>
-        </n-space>
-      </template>
-      <template v-else>
-        <n-space><n-input-number v-model:value="flatRange.min" placeholder="Min"/><n-input-number v-model:value="flatRange.max" placeholder="Max"/></n-space>
-      </template>
+
+      <div class="form-field">
+        <label class="form-label">分隔符</label>
+        <n-select v-model:value="localField.separator" :options="[{label:'空格 (同行)',value:'Space'},{label:'换行',value:'Newline'}]" @update:value="() => emitUpdate()"/>
+      </div>
     </n-space>
   </n-card>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
-import type { FieldDef, RangeValue } from '@/types'
-import { NCard, NSpace, NFormItem, NInput, NInputNumber, NSelect, NButton } from 'naive-ui'
+import { computed, reactive, ref, watch } from 'vue'
+import type { FieldDef, ValueExpr } from '@/types'
+import { NCard, NSpace, NInput, NSelect, NButton } from 'naive-ui'
+import ExpressionEditor from './ExpressionEditor.vue'
 
 const props = defineProps<{ modelValue: FieldDef; selfIndex?: number; allFields?: FieldDef[] }>()
 const emit = defineEmits<{ (e:'update:modelValue',v:FieldDef): void; (e:'remove'): void }>()
@@ -46,107 +56,102 @@ const emit = defineEmits<{ (e:'update:modelValue',v:FieldDef): void; (e:'remove'
 const typeOpts = ['Int32','Int64','Float32','Float64','Char','String'].map(v=>({label:v,value:v}))
 const distOpts = ['Uniform','Normal','Exponential','Poisson','Binomial','Geometric','LogNormal','Cauchy'].map(v=>({label:v,value:v}))
 
-const depMode = ref<'none'|'CountFrom'|'ValueFrom'|'RangeFrom'>('none')
-const depElemMin = ref(1); const depElemMax = ref(1000); const depMultiplier = ref(1.0)
-const depMinMult = ref(0.5); const depMaxMult = ref(2.0)
+// Simplified dep mode: only 'none' or 'CountFrom'
+const depMode = ref<'none'|'CountFrom'>('none')
+const countFromField = ref('')
+const localElemValue = ref<ValueExpr>({ type: 'const', value: 1 })
 
-function extractRange(rv: RangeValue): { min: number; max: number } {
-  if ('Int32' in rv) return rv.Int32
-  if ('Int64' in rv) return rv.Int64
-  if ('Float32' in rv) return rv.Float32
-  if ('Float64' in rv) return rv.Float64
-  if ('Char' in rv) return rv.Char
-  if ('StringLen' in rv) return rv.StringLen
-  return { min: 0, max: 100 }
-}
-function wrapRange(dt: string, min: number, max: number): RangeValue {
-  const r = { min, max }
-  switch (dt) {
-    case 'Int32': return { Int32: r }
-    case 'Int64': return { Int64: r }
-    case 'Float32': return { Float32: r }
-    case 'Float64': return { Float64: r }
-    case 'Char': return { Char: r }
-    default: return { StringLen: r }
-  }
-}
+// Min/max expression state
+const localMin = ref<ValueExpr>({ type: 'const', value: 0 })
+const localMax = ref<ValueExpr>({ type: 'const', value: 100 })
 
-const depOpts = ref<{label:string;value:string}[]>([{label:'无依赖 (需先给其他字段命名)',value:'none'}]);
+const localField = reactive<FieldDef>({ ...props.modelValue })
 
-function refreshDepOpts() {
+// Field options for selectors (all other named fields)
+const fieldOpts = computed(() => {
   const all = props.allFields || []
-  const parentNames = all
+  return all
     .filter((f, j) => j !== (props.selfIndex ?? -1) && f.name)
-    .map(f => f.name)
-  if (!parentNames.length) {
-    depOpts.value = [{ label: '无依赖 (需先给其他字段命名)', value: 'none' }]
+    .map(f => ({ label: f.name, value: f.name }))
+})
+
+// Simplified dep options: only CountFrom
+const depOpts = computed(() => {
+  const names = fieldOpts.value.map(o => o.value)
+  if (!names.length) {
+    return [{ label: '无依赖 (需先给其他字段命名)', value: 'none' }]
+  }
+  return [
+    { label: '无依赖', value: 'none' },
+    ...names.map(n => ({ label: `CountFrom: 个数 = ${n}`, value: `cf:${n}` })),
+  ]
+})
+
+// Initialize from modelValue
+function initFromField(field: FieldDef) {
+  Object.assign(localField, field)
+  depMode.value = 'none'
+  localMin.value = { type: 'const', value: 0 }
+  localMax.value = { type: 'const', value: 100 }
+  localElemValue.value = { type: 'const', value: 1 }
+  countFromField.value = ''
+
+  if (field.range.type === 'count_from') {
+    depMode.value = 'CountFrom'
+    countFromField.value = field.range.from_field
+    localElemValue.value = field.range.elem_value
   } else {
-    depOpts.value = [
-      { label: '无依赖', value: 'none' },
-      ...parentNames.map(n => ({ label: `CountFrom: 个数 = ${n}`, value: `cf:${n}` })),
-      ...parentNames.map(n => ({ label: `ValueFrom: max = ${n} × 倍数`, value: `vf:${n}` })),
-      ...parentNames.map(n => ({ label: `RangeFrom: 范围 = ${n} × [最小倍数, 最大倍数]`, value: `rf:${n}` })),
-    ]
+    // Static range
+    localMin.value = field.range.min
+    localMax.value = field.range.max
   }
 }
-
-watch(() => props.allFields?.map(f => f.name).join(','), () => refreshDepOpts(), { immediate: true })
 
 function onDepChange(val: string) {
   if (val === 'none') {
-    localField.depends_on = undefined
     depMode.value = 'none'
+    emitUpdate()
   } else if (val.startsWith('cf:')) {
     const parent = val.slice(3)
-    localField.depends_on = parent
     depMode.value = 'CountFrom'
-    localField.range = { CountFrom: { from_field: parent, elem_min: depElemMin.value, elem_max: depElemMax.value } }
-  } else if (val.startsWith('vf:')) {
-    const parent = val.slice(3)
-    localField.depends_on = parent
-    depMode.value = 'ValueFrom'
-    localField.range = { ValueFrom: { from_field: parent, multiplier: depMultiplier.value } }
-  } else if (val.startsWith('rf:')) {
-    const parent = val.slice(3)
-    localField.depends_on = parent
-    depMode.value = 'RangeFrom'
-    localField.range = { RangeFrom: { from_field: parent, min_mult: depMinMult.value, max_mult: depMaxMult.value } }
+    countFromField.value = parent
+    localField.range = { type: 'count_from', from_field: parent, elem_value: localElemValue.value }
+    emitUpdate()
   }
+}
+
+function onCountFromChange() {
+  if (depMode.value !== 'CountFrom') return
+  localField.range = { type: 'count_from', from_field: countFromField.value, elem_value: localElemValue.value }
   emitUpdate()
 }
 
-const localField = reactive<FieldDef>({ ...props.modelValue })
-const flatRange = reactive(extractRange(props.modelValue.range))
+function emitUpdate() {
+  if (depMode.value === 'CountFrom') {
+    localField.range = { type: 'count_from', from_field: countFromField.value, elem_value: localElemValue.value }
+  } else {
+    localField.range = { type: 'static', min: localMin.value, max: localMax.value }
+  }
+  emit('update:modelValue', { ...localField })
+}
 
-watch(() => props.modelValue, v => { Object.assign(localField, v); Object.assign(flatRange, extractRange(v.range)) })
+// Watch modelValue changes from parent
+watch(() => props.modelValue, v => initFromField(v), { immediate: true, deep: true })
+
+// Watch field name changes
 watch(() => localField.name, () => emitUpdate())
-watch([flatRange, () => localField.data_type], () => {
-  if (depMode.value === 'none') {
-    localField.range = wrapRange(localField.data_type, flatRange.min, flatRange.max)
-  }
-  emitUpdate()
-}, { deep: true })
-
-watch([depElemMin, depElemMax], () => {
-  if (depMode.value === 'CountFrom' && localField.depends_on) {
-    localField.range = { CountFrom: { from_field: localField.depends_on, elem_min: depElemMin.value, elem_max: depElemMax.value } }
-    emitUpdate()
-  }
-})
-
-watch(depMultiplier, () => {
-  if (depMode.value === 'ValueFrom' && localField.depends_on) {
-    localField.range = { ValueFrom: { from_field: localField.depends_on, multiplier: depMultiplier.value } }
-    emitUpdate()
-  }
-})
-
-watch([depMinMult, depMaxMult], () => {
-  if (depMode.value === 'RangeFrom' && localField.depends_on) {
-    localField.range = { RangeFrom: { from_field: localField.depends_on, min_mult: depMinMult.value, max_mult: depMaxMult.value } }
-    emitUpdate()
-  }
-})
-
-function emitUpdate() { emit('update:modelValue', { ...localField }) }
 </script>
+
+<style scoped>
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+.form-label {
+  font-size: 12px;
+  color: var(--n-text-color-3, #888);
+  font-weight: 500;
+}
+</style>

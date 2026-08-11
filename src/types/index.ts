@@ -1,14 +1,18 @@
 export type DataType = 'Int32' | 'Int64' | 'BigInt' | 'Float32' | 'Float64' | 'Char' | 'String'
 export type Distribution = 'Uniform' | 'Normal' | 'Exponential' | 'Poisson' | 'Binomial' | 'Geometric' | 'LogNormal' | 'Cauchy'
+export type Op = 'Mul' | 'Add' | 'Sub' | 'Min' | 'Max'
 
 export interface Range { min: number; max: number }
 
+export type ValueExpr =
+  | { type: 'const'; value: number }
+  | { type: 'from_field'; name: string }
+  | { type: 'random'; distribution: Distribution; lo: ValueExpr; hi: ValueExpr }
+  | { type: 'op'; field: string; operator: Op; operand: number }
+
 export type RangeValue =
-  | { Int32: Range } | { Int64: Range } | { Float32: Range } | { Float64: Range }
-  | { Char: Range } | { StringLen: Range }
-  | { CountFrom: { from_field: string; elem_min: number; elem_max: number } }
-  | { ValueFrom: { from_field: string; multiplier: number } }
-  | { RangeFrom: { from_field: string; min_mult: number; max_mult: number } }
+  | { type: 'static'; min: ValueExpr; max: ValueExpr }
+  | { type: 'count_from'; from_field: string; elem_value: ValueExpr }
 
 export type FieldSeparator = 'Space' | 'Newline'
 
@@ -17,7 +21,6 @@ export interface FieldDef {
   data_type: DataType
   distribution: Distribution
   range: RangeValue
-  depends_on?: string
   separator?: FieldSeparator
 }
 

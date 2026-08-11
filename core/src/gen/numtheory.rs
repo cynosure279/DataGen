@@ -119,13 +119,13 @@ fn factorize(n: u64) -> Vec<u64> {
 /// Trial division for `n ≤ 10^6`.
 fn trial_division(mut n: u64) -> Vec<u64> {
     let mut factors = Vec::new();
-    while n % 2 == 0 {
+    while n.is_multiple_of(2) {
         factors.push(2);
         n /= 2;
     }
     let mut d = 3;
     while d * d <= n {
-        while n % d == 0 {
+        while n.is_multiple_of(d) {
             factors.push(d);
             n /= d;
         }
@@ -321,17 +321,17 @@ fn primitive_root(p: u64) -> Option<u64> {
 /// Return the unique prime factors of `n` (no multiplicity).
 fn unique_prime_factors(mut n: u64) -> Vec<u64> {
     let mut factors = Vec::new();
-    if n % 2 == 0 {
+    if n.is_multiple_of(2) {
         factors.push(2);
-        while n % 2 == 0 {
+        while n.is_multiple_of(2) {
             n /= 2;
         }
     }
     let mut d = 3;
     while d * d <= n {
-        if n % d == 0 {
+        if n.is_multiple_of(d) {
             factors.push(d);
-            while n % d == 0 {
+            while n.is_multiple_of(d) {
                 n /= d;
             }
         }

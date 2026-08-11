@@ -38,7 +38,7 @@ const tcEnabled = computed({
 function toggleTC(v: boolean) { tcEnabled.value = v }
 
 function addField() {
-  configStore.addField({ name:'', data_type:'Int32', distribution:'Uniform', range:{ Int32:{min:1,max:100} } })
+  configStore.addField({ name:'', data_type:'Int32', distribution:'Uniform', range:{ type:'static', min:{ type:'const', value:1 }, max:{ type:'const', value:100 } } })
 }
 function removeField(i: number) { configStore.removeField(i) }
 function updateField(i: number, f: any) { configStore.updateField(i, f) }

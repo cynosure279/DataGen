@@ -43,6 +43,7 @@ const genStatusText = computed(() => {
     case 'running': return '运行: 进行中...'
     case 'done': return `生成: 完成 (${generationStore.results?.files.length || 0} 文件)`
     case 'error': return '生成: 失败'
+    default: return '生成: 空闲'
   }
 })
 </script>

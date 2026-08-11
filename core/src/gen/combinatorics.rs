@@ -1,6 +1,6 @@
 //! Combinatorics generators: permutations, combinations, derangements, partitions.
 
-use rand::RngExt;
+use rand::{Rng, RngExt};
 
 // ---------------------------------------------------------------------------
 // PermutationGen
@@ -13,7 +13,7 @@ impl PermutationGen {
     /// Generate a random permutation of `[1..n]` using Fisher-Yates shuffle.
     ///
     /// Returns an empty vector when `n == 0`.
-    pub fn fisher_yates(n: u32, rng: &mut impl RngExt) -> Vec<u32> {
+    pub fn fisher_yates(n: u32, rng: &mut impl Rng) -> Vec<u32> {
         if n == 0 {
             return vec![];
         }
@@ -152,7 +152,7 @@ impl DerangementGen {
     ///
     /// Repeatedly generates random permutations until a derangement is found.
     /// Returns an empty vector when `n == 0`.
-    pub fn random_derangement(n: u32, rng: &mut impl RngExt) -> Vec<u32> {
+    pub fn random_derangement(n: u32, rng: &mut impl Rng) -> Vec<u32> {
         if n == 0 {
             return vec![];
         }

@@ -218,7 +218,9 @@ int main() {
             .await
             .unwrap();
 
-        assert_eq!(result.stdout, "hello world\n");
+        // Normalize line endings for cross-platform (Windows uses \r\n)
+        let stdout = result.stdout.replace("\r\n", "\n");
+        assert_eq!(stdout, "hello world\n");
         assert_eq!(result.exit_code, Some(0));
         assert!(!result.timed_out);
         assert!(!result.killed);

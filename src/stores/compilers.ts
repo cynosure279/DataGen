@@ -20,6 +20,7 @@ export const useCompilerStore = defineStore('compiler', () => {
         selectedCompiler.value = compilers.value[0].name
       }
     } catch (e) {
+      // eslint-disable-next-line no-console
       console.error('Compiler detection failed:', e)
     } finally {
       detecting.value = false
