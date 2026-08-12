@@ -74,6 +74,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm tauri build --bundles dmg
+      - name: Ad-hoc sign macOS app
+        run: codesign --force --deep -s - target/release/bundle/macos/DataGen.app
       - uses: actions/upload-artifact@v4
         with:
           name: datagen-macos
@@ -92,11 +94,11 @@ jobs:
         with: { node-version: 20, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm tauri build --bundles msi
+      - run: pnpm tauri build --bundles nsis
       - uses: actions/upload-artifact@v4
         with:
           name: datagen-windows
-          path: target/release/bundle/msi/*.msi
+          path: target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
   build-web:

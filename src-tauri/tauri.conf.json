@@ -22,7 +22,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "dmg", "msi"],
+    "targets": ["deb", "dmg", "nsis"],
     "publisher": "Cynosure <72688232+cynosure279@users.noreply.github.com>",
     "shortDescription": "ACM test data generator and judge tool",
     "longDescription": "DataGen generates test data for ACM contest problems and runs a judge to evaluate solutions against them.",
