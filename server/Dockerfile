@@ -23,6 +23,9 @@ COPY native/Cargo.toml ./native/
 COPY wasm/Cargo.toml ./wasm/
 COPY server/Cargo.toml ./server/
 
+# Remove desktop from workspace members (not needed for server build)
+RUN sed -i 's/ "desktop"//g' Cargo.toml
+
 # Create dummy src files to build dependencies (cached layer)
 RUN mkdir -p core/src native/src wasm/src server/src && \
     echo "fn main() {}" > server/src/main.rs && \
