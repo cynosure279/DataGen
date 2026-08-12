@@ -16,17 +16,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with: { toolchain: stable }
       - uses: Swatinem/rust-cache@v2
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - run: cargo build --release -p datagen-desktop
-      - run: |
-          cd target/release
-          tar czf /tmp/datagen-linux.tar.gz datagen-desktop
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm tauri build --bundles deb
       - uses: actions/upload-artifact@v4
         with:
           name: datagen-linux
-          path: /tmp/datagen-linux.tar.gz
+          path: target/release/bundle/deb/*.deb
           if-no-files-found: error
 
   build-macos:
@@ -36,14 +36,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with: { toolchain: stable }
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p datagen-desktop
-      - run: |
-          cd target/release
-          tar czf /tmp/datagen-macos.tar.gz datagen-desktop
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm tauri build --bundles dmg
       - uses: actions/upload-artifact@v4
         with:
           name: datagen-macos
-          path: /tmp/datagen-macos.tar.gz
+          path: target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
   build-windows:
@@ -53,14 +55,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with: { toolchain: stable }
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p datagen-desktop
-      - run: |
-          cd target/release
-          7z a /tmp/datagen-windows.zip datagen-desktop.exe
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm tauri build --bundles msi
       - uses: actions/upload-artifact@v4
         with:
           name: datagen-windows
-          path: /tmp/datagen-windows.zip
+          path: target/release/bundle/msi/*.msi
           if-no-files-found: error
 
   build-web:
@@ -91,15 +95,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - run: |
-          TAG="ghcr.io/${{ github.repository }}/datagen-server:${{ github.ref_name }}"
-          docker pull $TAG
-          docker save -o /tmp/datagen-server.tar $TAG
-      - uses: actions/upload-artifact@v4
-        with:
-          name: datagen-server-docker
-          path: /tmp/datagen-server.tar
-          if-no-files-found: error
 
   release:
     needs: [build-linux, build-macos, build-windows]
@@ -122,7 +117,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/datagen-linux/datagen-linux.tar.gz
-            artifacts/datagen-macos/datagen-macos.tar.gz
-            artifacts/datagen-windows/datagen-windows.zip
+            artifacts/datagen-linux/*.deb
+            artifacts/datagen-macos/*.dmg
+            artifacts/datagen-windows/*.msi
           generate_release_notes: true
