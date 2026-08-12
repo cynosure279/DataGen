@@ -41,7 +41,8 @@
         "section": "utils",
         "priority": "optional",
         "files": {
-          "/usr/share/doc/data-gen/copyright": "../LICENSE"
+          "/usr/share/doc/data-gen/copyright": "../debian/copyright",
+          "/usr/share/lintian/overrides/data-gen": "../debian/data-gen.lintian-overrides"
         }
       }
     },

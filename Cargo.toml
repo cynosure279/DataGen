@@ -6,3 +6,6 @@ members = ["core", "native", "wasm", "server", "src-tauri"]
 version = "0.1.1"
 authors = ["Cynosure <72688232+cynosure279@users.noreply.github.com>"]
 license = "Apache-2.0"
+
+[profile.release]
+strip = true

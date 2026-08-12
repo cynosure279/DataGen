@@ -1,0 +1,4 @@
+data-gen binary-without-manpage
+data-gen missing-dependency-on-libc
+data-gen no-changelog
+data-gen extended-description-line-too-long
