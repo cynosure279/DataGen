@@ -52,7 +52,7 @@ jobs:
           dpkg-deb --contents "$deb" >/dev/null
           lintian --fail-on error "$deb" || { rc=$?; [ "$rc" -eq 2 ] && echo "Warnings found but no errors — passing" || exit $rc; }
           package_name="$(dpkg-deb -f "$deb" Package)"
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$deb"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "./$deb"
           dpkg-query --showformat='${Status}\n' --show "$package_name" | grep -q '^install ok installed$'
           sudo apt-get remove -y "$package_name"
       - uses: actions/upload-artifact@v4
