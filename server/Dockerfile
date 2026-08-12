@@ -10,10 +10,20 @@ FROM rust:slim-bookworm AS builder
 
 WORKDIR /app
 
-# Install build dependencies for native crates (OpenSSL, pkg-config, etc.)
+# Install build dependencies for native crates:
+#   - pkg-config / libssl-dev            : core native-crate deps
+#   - libwebkit2gtk-4.1-dev              : tauri v2 -> wry -> webkit2gtk-sys (Linux webview)
+#   - libgtk-3-dev                       : tauri -> gtk-sys
+#   - libayatana-appindicator3-dev       : tauri -> libappindicator-sys (tray)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libssl-dev \
+    libwebkit2gtk-4.1-dev \
+    libgtk-3-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev \
+    libxdo-dev \
+    patchelf \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy workspace manifests first for dependency caching
@@ -33,8 +43,9 @@ RUN mkdir -p core/src native/src wasm/src server/src && \
         echo "// dummy" > $d/src/lib.rs; \
     done
 
-# Build dependencies (this layer is cached unless Cargo.toml/lock changes)
-RUN cargo build --release -p datagen-server 2>/dev/null || true
+# Build dependencies (this layer is cached unless Cargo.toml/lock changes).
+# Fail loudly if the dependency build breaks (no hidden `|| true`).
+RUN cargo build --release -p datagen-server
 
 # Remove dummy files and copy real source
 RUN rm -rf core/src native/src wasm/src server/src
@@ -43,8 +54,8 @@ COPY native/src ./native/src
 COPY wasm/src ./wasm/src
 COPY server/src ./server/src
 
-# Touch main.rs to force rebuild of the actual binary
-RUN touch server/src/main.rs
+# Force Cargo to rebuild every crate whose dummy source was used for the cache layer.
+RUN touch core/src/lib.rs native/src/lib.rs wasm/src/lib.rs server/src/main.rs
 
 # Build the actual server binary
 RUN cargo build --release -p datagen-server
@@ -73,9 +84,10 @@ COPY --from=builder /app/target/release/datagen-server /app/datagen-server
 # Expose the default server port
 EXPOSE 3000
 
-# Health check
+# Health check: probe GET /health with the runtime's python3 (curl is not installed),
+# honoring the PORT environment variable (server defaults to 3000).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["/app/datagen-server", "--health"] || curl -f http://localhost:3000/health || exit 1
+    CMD python3 -c "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ.get('PORT', '3000') + '/health', timeout=5)"
 
 # Run the server
 ENTRYPOINT ["/app/datagen-server"]

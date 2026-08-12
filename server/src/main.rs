@@ -40,7 +40,7 @@ use native::{
     execute::{ExecResult, ExecRunner},
 };
 use serde::{Deserialize, Serialize};
-use std::{convert::Infallible, sync::Arc, time::Duration};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tokio_stream::wrappers::ReceiverStream;
@@ -813,8 +813,11 @@ async fn main() {
 
     tracing::info!("DataGen Server listening on {addr}");
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .expect("Server exited with error");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .expect("Server exited with error");
 }

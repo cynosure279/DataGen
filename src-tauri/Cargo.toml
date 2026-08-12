@@ -1,7 +1,9 @@
 [package]
 name = "datagen-desktop"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
+authors.workspace = true
+license.workspace = true
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

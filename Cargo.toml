@@ -1,3 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["core", "native", "wasm", "server", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Cynosure <72688232+cynosure279@users.noreply.github.com>"]
+license = "Apache-2.0"

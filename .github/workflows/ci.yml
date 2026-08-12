@@ -48,8 +48,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
+            libayatana-appindicator3-dev \
             librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
             patchelf
 
       - name: cargo test --workspace
@@ -115,3 +117,110 @@ jobs:
 
       - name: vue-tsc typecheck
         run: npx vue-tsc --noEmit
+
+  #############################################################################
+  # Debian package: build .deb + structure/metadata validation +
+  # lintian error gate + install/uninstall smoke
+  #############################################################################
+  deb-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ubuntu-deb-smoke
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Tauri Linux build deps + lintian
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libxdo-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            patchelf \
+            dpkg \
+            lintian
+
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build .deb bundle
+        run: pnpm tauri build --bundles deb
+
+      - name: Discover .deb artifact
+        run: |
+          DEB="$(find target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)"
+          if [ -z "$DEB" ]; then
+            echo "::error::No .deb artifact found under target/release/bundle/deb"
+            exit 1
+          fi
+          echo "DEB=$DEB" >> "$GITHUB_ENV"
+          echo "Discovered deb artifact: $DEB"
+
+      - name: Validate deb structure and metadata (dpkg-deb)
+        run: |
+          file "$DEB"
+          dpkg-deb --info "$DEB"
+          dpkg-deb --contents "$DEB"
+          # Package name is derived from the artifact itself (productName "DataGen"
+          # produces package "data-gen"), not hardcoded.
+          PKG="$(dpkg-deb -f "$DEB" Package)"
+          if [ -z "$PKG" ]; then
+            echo "::error::deb is missing the Package field"
+            exit 1
+          fi
+          echo "PKG=$PKG" >> "$GITHUB_ENV"
+          echo "Package name: $PKG"
+          # Tauri deb depends (gcc/g++/python3) must be reflected in metadata
+          dpkg-deb -f "$DEB" Depends | grep -qw gcc
+          dpkg-deb -f "$DEB" Depends | grep -qw 'g++'
+          dpkg-deb -f "$DEB" Depends | grep -qw python3
+
+      - name: Lintian (errors fail the gate)
+        run: |
+          lintian --fail-on error --info "$DEB"
+
+      - name: Install / uninstall smoke
+        run: |
+          sudo dpkg -i "$DEB"
+          dpkg -s "$PKG" >/dev/null
+          BIN="$(dpkg -L "$PKG" | grep '^/usr/bin/' | head -n 1)"
+          if [ -z "$BIN" ]; then
+            echo "::error::installed package exposes no binary under /usr/bin"
+            exit 1
+          fi
+          if [ ! -x "$BIN" ]; then
+            echo "::error::installed binary $BIN is not executable"
+            exit 1
+          fi
+          echo "Installed $PKG; binary present and executable: $BIN"
+          sudo dpkg -r "$PKG"
+          if [ -e "$BIN" ]; then
+            echo "::error::binary still present after package removal"
+            exit 1
+          fi
+          echo "deb smoke passed: install, structure/metadata, lintian (errors only), uninstall"

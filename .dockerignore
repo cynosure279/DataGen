@@ -1,0 +1,9 @@
+.git
+.github
+node_modules
+target
+dist
+.omo
+*.log
+.vscode
+.idea

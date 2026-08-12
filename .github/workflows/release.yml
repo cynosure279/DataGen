@@ -13,16 +13,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify tag matches workspace version
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          cargo_version="$(sed -n '/^\[workspace.package\]/,/^\[/p' Cargo.toml | grep -m1 '^version' | cut -d'"' -f2)"
+          if [ -z "$cargo_version" ]; then
+            echo "::error::Could not extract version from [workspace.package] in Cargo.toml"
+            exit 1
+          fi
+          if [ "$tag_version" != "$cargo_version" ]; then
+            echo "::error::Tag v${tag_version} does not match workspace version ${cargo_version}"
+            exit 1
+          fi
+          echo "Verified: tag v${tag_version} matches workspace version ${cargo_version}"
       - uses: dtolnay/rust-toolchain@master
         with: { toolchain: stable }
       - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: pnpm }
-      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf lintian
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm tauri build --bundles deb
+      - name: Validate deb package (dpkg-deb + lintian)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          debs=(target/release/bundle/deb/*.deb)
+          if [ "${#debs[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one .deb under target/release/bundle/deb/, found ${#debs[@]}"
+            exit 1
+          fi
+          deb="${debs[0]}"
+          echo "Validating: $deb"
+          dpkg-deb --info "$deb"
+          dpkg-deb --contents "$deb" >/dev/null
+          lintian --fail-on error "$deb"
+          package_name="$(dpkg-deb -f "$deb" Package)"
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$deb"
+          dpkg-query --showformat='${Status}\n' --show "$package_name" | grep -q '^install ok installed$'
+          sudo apt-get remove -y "$package_name"
       - uses: actions/upload-artifact@v4
         with:
           name: datagen-linux
@@ -69,7 +101,6 @@ jobs:
 
   build-web:
     runs-on: ubuntu-latest
-    continue-on-error: true
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +117,40 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=sha
-      - uses: docker/build-push-action@v6
+      - name: Build image (load, not push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          load: true
+          tags: datagen-server:ci-check
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Verify container healthcheck
+        run: |
+          set -euo pipefail
+          container="datagen-server-ci-$$"
+          docker rm -f "$container" >/dev/null 2>&1 || true
+          docker run -d --name "$container" -p 18080:3000 datagen-server:ci-check
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            status=$(docker inspect --format='{{.State.Health.Status}}' "$container")
+            if [ "$status" = healthy ]; then
+              echo "Container healthy after ${i}x2s"
+              exit 0
+            fi
+            if [ "$status" = unhealthy ]; then
+              docker logs "$container"
+              echo "::error::Container healthcheck failed"
+              exit 1
+            fi
+            sleep 2
+          done
+          docker logs "$container"
+          echo "::error::Container did not become healthy within 60s"
+          exit 1
+      - name: Push verified image
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: server/Dockerfile
@@ -94,10 +158,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   release:
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux, build-macos, build-windows, build-web]
     runs-on: ubuntu-latest
     permissions: { contents: write }
     steps:
