@@ -107,7 +107,17 @@ jobs:
     permissions: { contents: write }
     steps:
       - uses: actions/download-artifact@v4
-        with: { path: artifacts }
+        with:
+          path: artifacts
+          pattern: "datagen-linux"
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: "datagen-macos"
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: "datagen-windows"
       - run: ls -R artifacts/
       - uses: softprops/action-gh-release@v2
         with:
@@ -115,5 +125,4 @@ jobs:
             artifacts/datagen-linux/datagen-linux.tar.gz
             artifacts/datagen-macos/datagen-macos.tar.gz
             artifacts/datagen-windows/datagen-windows.zip
-            artifacts/datagen-server-docker/datagen-server.tar
           generate_release_notes: true
