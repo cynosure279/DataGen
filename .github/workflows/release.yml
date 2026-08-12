@@ -160,7 +160,7 @@ jobs:
           cache-from: type=gha
 
   release:
-    needs: [build-linux, build-macos, build-windows, build-web]
+    needs: [build-linux, build-macos, build-web]
     runs-on: ubuntu-latest
     permissions: { contents: write }
     steps:
