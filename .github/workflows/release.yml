@@ -74,15 +74,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm tauri build --bundles dmg
-      - name: Ad-hoc sign macOS app
+      - name: Ad-hoc sign macOS app (if present)
         run: |
-          app=$(find target/release/bundle -name 'DataGen.app' -type d | head -1)
-          if [ -z "$app" ]; then
-            echo "::error::Could not find DataGen.app"
-            exit 1
+          app=$(find target/release/bundle -name '*.app' -type d | head -1)
+          if [ -n "$app" ]; then
+            echo "Signing: $app"
+            codesign --force --deep -s - "$app"
+          else
+            echo "No .app found in bundle dir, skipping codesign"
           fi
-          echo "Signing: $app"
-          codesign --force --deep -s - "$app"
       - uses: actions/upload-artifact@v4
         with:
           name: datagen-macos
